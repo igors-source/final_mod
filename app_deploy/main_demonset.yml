@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nginx-app
+  namespace: application
+spec:
+  selector:
+    matchLabels:
+      app: superapp
+  template:
+    metadata:
+      labels:
+        app: superapp
+    spec:
+      containers:
+      - name: nginx
+        image: igorssource/testapp:0.0.1
