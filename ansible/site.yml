@@ -1,0 +1,103 @@
+---
+- name: pip install
+  hosts: master-1
+  become: true
+
+  tasks:
+
+    - name: get get-pip.py
+      ansible.builtin.get_url:
+        url: https://bootstrap.pypa.io/get-pip.py
+        dest: "./"
+
+    - name: rm EXTERNALLY-MANAGED
+      ansible.builtin.file:
+        path: /usr/lib/python3.11/EXTERNALLY-MANAGED
+        state: absent
+
+    - name: install pip
+      ansible.builtin.shell: python3.11 get-pip.py
+
+
+
+- name: kubespray depts
+  hosts: master-1
+  become: true
+
+  tasks:
+
+    - name: apt update install git
+      ansible.builtin.apt:
+        update_cache: true
+        pkg:
+        - git
+
+    - name: Клонируем kubespray из репозитория
+      ansible.builtin.git:
+        repo: https://github.com/kubernetes-sigs/kubespray.git
+        dest: ./kubespray
+
+    - name: chown kubspray
+      ansible.builtin.file:
+        dest: ./kubespray
+        recurse: yes
+        owner: motorher
+        group: motorher
+
+    - name: pip requirements.txt
+      ansible.builtin.pip:
+        requirements: /home/motorher/kubespray/requirements.txt
+        extra_args: -r /home/motorher/kubespray/requirements.txt
+
+    - name: inventory depl inventory/mycluster
+      ansible.builtin.copy:
+        src: /home/motorher/kubespray/inventory/sample/
+        dest: /home/motorher/kubespray/inventory/mycluster/
+        remote_src: true
+
+
+- name: export env
+  hosts: master-1
+  become: true
+
+  tasks:
+
+    - name: cp hosts.yml
+      ansible.builtin.copy:
+        src: ./inventory/hosts.yml
+        dest: ./kubespray/inventory/mycluster/
+
+    - name: cp ssh
+      ansible.builtin.copy:
+        src: ~/.ssh/id_rsa
+        dest: ./.ssh
+        owner: motorher
+        mode: '0600'
+
+- name: Install Helm
+  hosts: master-1
+  become: true
+  tasks:
+    - name: Install curl (if not already installed)
+      package:
+        name: curl
+        state: present
+
+    - name: Download Helm installation script
+      get_url:
+        url: https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+        dest: /tmp/get_helm.sh
+        mode: '0755'
+
+    - name: Run Helm installation script
+      command: /tmp/get_helm.sh
+      args:
+        creates: /usr/local/bin/helm
+      register: helm_install_result
+      changed_when: false
+
+    - name: Add /usr/local/bin to PATH
+      lineinfile:
+        path: ~/.bashrc
+        line: 'export PATH=$PATH:/usr/local/bin'
+      when: helm_install_result.rc == 0
